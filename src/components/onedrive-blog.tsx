@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
-import { Marked } from "marked";
 import DOMPurify from "dompurify";
+import { Marked } from "marked";
+import { useEffect, useState } from "react";
+
 type Status = {
   configured: boolean;
   connected: boolean;
@@ -24,21 +25,21 @@ type Note = {
 };
 async function api(path: string, method = "GET", data?: unknown) {
   const response = await fetch(`/api/blog/${path}`, {
-    method,
-    credentials: "same-origin",
-    cache: "no-store",
-    headers: data ? { "Content-Type": "application/json" } : {},
     body: data ? JSON.stringify(data) : undefined,
+    cache: "no-store",
+    credentials: "same-origin",
+    headers: data ? { "Content-Type": "application/json" } : {},
+    method,
   });
   const result =
     response.status === 204
       ? {}
-      : await response
-          .json()
-          .catch(() => ({
-            error: "连接服务未启动，请使用完整的博客预览地址。",
-          }));
-  if (!response.ok) throw new Error(result.error || "读取失败，请稍后再试。");
+      : await response.json().catch(() => ({
+          error: "连接服务未启动，请使用完整的博客预览地址。",
+        }));
+  if (!response.ok) {
+    throw new Error(result.error || "读取失败，请稍后再试。");
+  }
   return result;
 }
 function Markdown({ note }: { note: Note }) {
@@ -78,10 +79,10 @@ function Markdown({ note }: { note: Note }) {
   const html = DOMPurify.sanitize(
     parser.parse(note.markdown, { async: false }),
     {
-      USE_PROFILES: { html: true },
-      FORBID_TAGS: ["style", "form", "video", "audio"],
       FORBID_ATTR: ["style"],
+      FORBID_TAGS: ["style", "form", "video", "audio"],
       SANITIZE_NAMED_PROPS: true,
+      USE_PROFILES: { html: true },
     }
   );
   return (
@@ -129,12 +130,13 @@ export function OneDriveManager() {
               ? "选择要分享的笔记，先查看正文和附件。"
               : "打开你的笔记库文件夹，然后点击“设为笔记库”。"
           );
-        } else
+        } else {
           setMessage(
             state.configured
               ? "请连接网站主人的微软账号。"
               : "微软连接配置尚未完成，暂时不能读取 OneDrive。"
           );
+        }
       } catch (error) {
         setMessage(String(error));
       } finally {
@@ -153,7 +155,7 @@ export function OneDriveManager() {
     }
   }
   const parent = trail.at(-1)!;
-  if (!status?.authenticated)
+  if (!status?.authenticated) {
     return (
       <section className="blog-callout">
         <div>
@@ -171,6 +173,7 @@ export function OneDriveManager() {
         </div>
       </section>
     );
+  }
   return (
     <>
       <div className="section-bar">
@@ -327,8 +330,8 @@ export function OneDriveManager() {
                   onClick={() =>
                     void run(async () => {
                       const result = await api("shares", "POST", {
-                        id: note.id,
                         assetIds: selectedAssets,
+                        id: note.id,
                       });
                       setSharedUrl(result.url);
                       setMessage(
@@ -425,7 +428,7 @@ export function SharedNotes() {
         />
       </label>
       <p role="status" className="muted">
-        {message || (!visible.length ? "没有匹配的笔记。" : "")}
+        {message || (visible.length ? "" : "没有匹配的笔记。")}
       </p>
       <div className="note-grid">
         {visible.map((note) => (

@@ -1,8 +1,15 @@
 ---
-import Layout from "@/layouts/blog.astro";
 import { SharedNotes } from "@/components/onedrive-blog";
+import Layout from "@/layouts/blog.astro";
 ---
+
 <Layout title="笔记">
-  <section class="blog-intro"><p class="eyebrow">FIELD NOTES</p><h1>把思考留在这里。</h1><p class="intro-text">关于设计的观察，关于工具的尝试。<br />这里只展示选择分享的笔记。</p></section>
+  <section class="blog-intro">
+    <p class="eyebrow">FIELD NOTES</p>
+    <h1>把思考留在这里。</h1>
+    <p class="intro-text">
+      关于设计的观察，关于工具的尝试。<br>这里只展示选择分享的笔记。
+    </p>
+  </section>
   <SharedNotes client:only="react" />
 </Layout>

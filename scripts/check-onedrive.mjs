@@ -1,39 +1,24 @@
 import assert from "node:assert/strict";
-import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
+import { DatabaseSync } from "node:sqlite";
 import {
   handleBlogRequest,
-  relativeAsset,
   readableMarkdown,
+  relativeAsset,
 } from "../server/blog-api.mjs";
+
 const database = new DatabaseSync(":memory:");
 database.exec(
   readFileSync(new URL("../migrations/0001_blog.sql", import.meta.url), "utf8")
 );
 const DB = {
-  prepare(sql) {
-    let params = [];
-    return {
-      bind(...values) {
-        params = values;
-        return this;
-      },
-      async first() {
-        return database.prepare(sql).get(...params) || null;
-      },
-      async all() {
-        return { results: database.prepare(sql).all(...params) };
-      },
-      async run() {
-        return database.prepare(sql).run(...params);
-      },
-    };
-  },
   async batch(statements) {
     database.exec("BEGIN");
     try {
       const results = [];
-      for (const statement of statements) results.push(await statement.run());
+      for (const statement of statements) {
+        results.push(await statement.run());
+      }
       database.exec("COMMIT");
       return results;
     } catch (error) {
@@ -41,64 +26,83 @@ const DB = {
       throw error;
     }
   },
+  prepare(sql) {
+    let params = [];
+    return {
+      async all() {
+        return { results: database.prepare(sql).all(...params) };
+      },
+      bind(...values) {
+        params = values;
+        return this;
+      },
+      async first() {
+        return database.prepare(sql).get(...params) || null;
+      },
+      async run() {
+        return database.prepare(sql).run(...params);
+      },
+    };
+  },
 };
 const origin = "http://localhost:8788";
 const env = {
+  APP_ORIGIN: origin,
   BLOG_DB: DB,
+  BLOG_SECRET: "test-only-secret-at-least-32-characters",
   MS_CLIENT_ID: "test-client",
   MS_CLIENT_SECRET: "test-secret",
-  BLOG_SECRET: "test-only-secret-at-least-32-characters",
   OWNER_EMAIL: "owner@example.com",
-  APP_ORIGIN: origin,
 };
 let body =
   "# 分享笔记\n\n![图片](photo.png)\n\n[配置](.obsidian/settings.json)";
 let microsoftOwner = "owner-id";
 const fixture = {
-  root: { id: "root", name: "OneDrive", folder: {} },
-  vault: {
-    id: "vault",
-    name: "测试笔记库",
-    folder: {},
-    parentReference: { id: "root" },
-  },
-  note: {
-    id: "note",
-    name: "分享笔记.md",
-    size: 100,
-    file: {},
-    parentReference: { id: "vault" },
-  },
-  other: {
-    id: "other",
-    name: "私密笔记.md",
-    size: 100,
-    file: {},
-    parentReference: { id: "root" },
-  },
   asset: {
+    file: { mimeType: "image/png" },
     id: "asset",
     name: "photo.png",
-    size: 20,
-    file: { mimeType: "image/png" },
     parentReference: { id: "vault" },
+    size: 20,
   },
   hidden: {
+    folder: {},
     id: "hidden",
     name: ".obsidian",
-    folder: {},
     parentReference: { id: "vault" },
+  },
+  note: {
+    file: {},
+    id: "note",
+    name: "分享笔记.md",
+    parentReference: { id: "vault" },
+    size: 100,
+  },
+  other: {
+    file: {},
+    id: "other",
+    name: "私密笔记.md",
+    parentReference: { id: "root" },
+    size: 100,
+  },
+  root: { folder: {}, id: "root", name: "OneDrive" },
+  vault: {
+    folder: {},
+    id: "vault",
+    name: "测试笔记库",
+    parentReference: { id: "root" },
   },
 };
 const actualFetch = globalThis.fetch;
 globalThis.fetch = async (input, options) => {
   const url = new URL(input);
-  if (url.hostname === "login.microsoftonline.com")
+  if (url.hostname === "login.microsoftonline.com") {
     return Response.json({
       access_token: "PRIVATE_ACCESS_TOKEN",
-      refresh_token: "PRIVATE_REFRESH_TOKEN",
       expires_in: 3600,
+      refresh_token: "PRIVATE_REFRESH_TOKEN",
     });
+  }
   if (url.hostname === "download.example.com") {
     assert.ok(!options?.headers?.Authorization);
     return new Response(url.pathname === "/note" ? body : "image-bytes");
@@ -106,22 +110,27 @@ globalThis.fetch = async (input, options) => {
   assert.equal(url.hostname, "graph.microsoft.com");
   assert.ok(options.headers.Authorization.startsWith("Bearer "));
   const path = decodeURIComponent(url.pathname);
-  if (path === "/v1.0/me")
+  if (path === "/v1.0/me") {
     return Response.json({
+      displayName: "测试主人",
       id: microsoftOwner,
       mail: "owner@example.com",
-      displayName: "测试主人",
     });
-  if (path.endsWith("/children"))
+  }
+  if (path.endsWith("/children")) {
     return Response.json({ value: [fixture.note, fixture.hidden] });
-  if (path.endsWith("/content"))
+  }
+  if (path.endsWith("/content")) {
     return new Response(null, {
-      status: 302,
       headers: {
         Location: `https://download.example.com/${path.includes("/note/") ? "note" : "asset"}`,
       },
+      status: 302,
     });
-  if (path.includes(":/photo.png")) return Response.json(fixture.asset);
+  }
+  if (path.includes(":/photo.png")) {
+    return Response.json(fixture.asset);
+  }
   const id = path.split("/").at(-1);
   return fixture[id]
     ? Response.json(fixture[id])
@@ -136,14 +145,14 @@ const call = (
 ) =>
   handleBlogRequest(
     new Request(`${origin}/api/blog/${path}`, {
-      method,
+      body: data ? JSON.stringify(data) : undefined,
       headers: {
         ...(session ? { Cookie: session } : {}),
         ...(data
-          ? { Origin: originHeader, "Content-Type": "application/json" }
+          ? { "Content-Type": "application/json", Origin: originHeader }
           : {}),
       },
-      body: data ? JSON.stringify(data) : undefined,
+      method,
     }),
     env
   );
@@ -160,8 +169,8 @@ async function login() {
     cookie
   );
   return {
-    finish,
     cookie: `blog_session=${finish.headers.get("Set-Cookie")?.match(/blog_session=([^;]+)/)?.[1]}`,
+    finish,
   };
 }
 try {
@@ -207,14 +216,14 @@ try {
       await call(
         "shares",
         "POST",
-        { id: "note", assetIds: ["hidden"] },
+        { assetIds: ["hidden"], id: "note" },
         session
       )
     ).status,
     400
   );
   const published = await (
-    await call("shares", "POST", { id: "note", assetIds: [] }, session)
+    await call("shares", "POST", { assetIds: [], id: "note" }, session)
   ).json();
   const publicNote = await (await call(`public/${published.slug}`)).json();
   assert.equal(publicNote.markdown, body);
@@ -233,7 +242,7 @@ try {
   assert.equal((await call(`public/${published.slug}`)).status, 404);
   body = "![图片](photo.png)";
   const republished = await (
-    await call("shares", "POST", { id: "note", assetIds: ["asset"] }, session)
+    await call("shares", "POST", { assetIds: ["asset"], id: "note" }, session)
   ).json();
   assert.equal(republished.slug, published.slug);
   assert.equal(

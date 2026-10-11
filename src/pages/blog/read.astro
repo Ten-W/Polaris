@@ -1,5 +1,6 @@
 ---
-import Layout from "@/layouts/blog.astro";
 import { SharedReader } from "@/components/onedrive-blog";
+import Layout from "@/layouts/blog.astro";
 ---
+
 <Layout title="阅读笔记"><SharedReader client:only="react" /></Layout>

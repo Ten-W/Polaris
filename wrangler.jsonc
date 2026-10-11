@@ -2,5 +2,30 @@
   "name": "ten-w-polaris",
   "pages_build_output_dir": "./dist",
   "compatibility_date": "2026-10-11",
-  "d1_databases": [{ "binding": "BLOG_DB", "database_name": "ten-w-blog", "database_id": "8c4b4173-d487-4e70-8148-38731c207a6d" }]
+  "d1_databases": [
+    {
+      "binding": "BLOG_DB",
+      "database_name": "ten-w-blog",
+      "database_id": "8c4b4173-d487-4e70-8148-38731c207a6d"
+    }
+  ],
+  "vars": {
+    "MS_CLIENT_ID": "d7c85f26-201e-452e-a376-baf950ef22a5",
+    "APP_ORIGIN": "http://localhost:8788"
+  },
+  "env": {
+    "preview": {
+      "d1_databases": [
+        {
+          "binding": "BLOG_DB",
+          "database_name": "ten-w-blog",
+          "database_id": "8c4b4173-d487-4e70-8148-38731c207a6d"
+        }
+      ],
+      "vars": {
+        "MS_CLIENT_ID": "d7c85f26-201e-452e-a376-baf950ef22a5",
+        "APP_ORIGIN": "https://codex-blog-foundation.ten-w-polaris.pages.dev"
+      }
+    }
+  }
 }
