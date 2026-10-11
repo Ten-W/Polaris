@@ -1,6 +1,6 @@
 import DOMPurify from "dompurify";
 import { Marked } from "marked";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type Status = {
   configured: boolean;
@@ -20,7 +20,13 @@ type Note = {
   title: string;
   markdown: string;
   modified?: string;
-  assets: { id?: string; name?: string; ref: string; url?: string }[];
+  assets: {
+    id?: string;
+    name?: string;
+    ref: string;
+    url?: string;
+    originalUrl?: string;
+  }[];
   missing?: string[];
 };
 async function api(path: string, method = "GET", data?: unknown) {
@@ -43,6 +49,7 @@ async function api(path: string, method = "GET", data?: unknown) {
   return result;
 }
 function Markdown({ note }: { note: Note }) {
+  const article = useRef<HTMLElement>(null);
   const assets = new Map(
     note.assets
       .filter((asset) => asset.url)
@@ -54,8 +61,18 @@ function Markdown({ note }: { note: Note }) {
       .replaceAll('"', "&quot;")
       .replaceAll("<", "&lt;")
       .replaceAll(">", "&gt;");
-  const safeUrl = (href: string) =>
-    assets.get(href) || (/^https?:\/\//i.test(href) ? href : null);
+  const safeUrl = (href: string) => {
+    if (assets.has(href)) return assets.get(href)!;
+    try {
+      const url = new URL(href);
+      return /^https?:$/.test(url.protocol) &&
+        !/^(localhost|127\.|\[::1\])/i.test(url.hostname)
+        ? href
+        : null;
+    } catch {
+      return null;
+    }
+  };
   const parser = new Marked({
     renderer: {
       html() {
@@ -63,9 +80,10 @@ function Markdown({ note }: { note: Note }) {
       },
       image({ href, text }) {
         const url = safeUrl(href);
-        return url
-          ? `<img src="${escape(url)}" alt="${escape(text)}" loading="lazy">`
-          : `<span>[图片未分享：${escape(text)}]</span>`;
+        if (!url) return `<span>[图片尚未接入或未分享：${escape(text)}]</span>`;
+        const original =
+          note.assets.find((asset) => asset.ref === href)?.originalUrl || url;
+        return `<a class="note-image" href="${escape(original)}" target="_blank" rel="noopener noreferrer" aria-label="查看原图：${escape(text)}"><img data-src="${escape(url)}" alt="${escape(text)}" width="240" height="180" decoding="async"><span class="image-status">图片待加载 · 点击查看原图</span></a>`;
       },
       link({ href, tokens }) {
         const url = safeUrl(href);
@@ -85,8 +103,47 @@ function Markdown({ note }: { note: Note }) {
       USE_PROFILES: { html: true },
     }
   );
+  useEffect(() => {
+    const images =
+      article.current?.querySelectorAll<HTMLImageElement>("img[data-src]");
+    if (!images) return;
+    const load = (img: HTMLImageElement) => {
+      img.onload = () => {
+        img.parentElement?.classList.add("image-loaded");
+        const status = img.parentElement?.querySelector(".image-status");
+        if (status) status.textContent = "点击查看原图 ↗";
+      };
+      img.onerror = () => {
+        const status = img.parentElement?.querySelector(".image-status");
+        if (status) status.textContent = "图片加载失败 · 点击尝试查看原图";
+      };
+      img.src = img.dataset.src!;
+    };
+    const observer =
+      "IntersectionObserver" in window
+        ? new IntersectionObserver(
+            (entries) => {
+              for (const entry of entries)
+                if (entry.isIntersecting) {
+                  load(entry.target as HTMLImageElement);
+                  observer?.unobserve(entry.target);
+                }
+            },
+            { rootMargin: "200px" }
+          )
+        : null;
+    images.forEach((img) => (observer ? observer.observe(img) : load(img)));
+    return () => {
+      observer?.disconnect();
+      images.forEach((img) => {
+        img.onload = null;
+        img.onerror = null;
+      });
+    };
+  }, [html]);
   return (
     <article
+      ref={article}
       className="note-prose"
       dangerouslySetInnerHTML={{ __html: html }}
     />
@@ -192,7 +249,8 @@ export function OneDriveManager() {
         </button>
       </div>
       <div className="preview-notice">
-        只有明确提交分享的笔记和勾选的附件会公开。更换笔记库会取消之前的分享；重新分享同一篇文章会保留链接。
+        已分享笔记引用的 OE Link 图片会自动从 OneDrive
+        读取；其他附件需勾选。更换笔记库会取消之前的分享；重新分享同一篇文章会保留链接。
       </div>
       <div className="workspace">
         <aside className="note-sidebar">

@@ -44,6 +44,40 @@ const cookie = (env, name, value, age) =>
   `${name}=${value}; HttpOnly; SameSite=Lax; Path=/api/blog; Max-Age=${age}${env.APP_ORIGIN.startsWith("https:") ? "; Secure" : ""}`;
 const itemPath = (id) => `/me/drive/items/${encodeURIComponent(id)}`;
 const fields = "id,name,size,folder,file,parentReference,lastModifiedDateTime";
+const sharedNoteCache = new Map();
+
+export function eagleImages(markdown) {
+  const images = new Map();
+  marked.walkTokens(marked.lexer(markdown), (token) => {
+    if (token.type !== "image") return;
+    const match = token.href.match(
+      /^https?:\/\/(?:localhost|127\.0\.0\.1):\d+\/images\/([A-Za-z0-9_-]+)\.info$/i
+    );
+    if (match) images.set(token.href, match[1]);
+  });
+  return images;
+}
+
+async function sharedNote(env, row, shared) {
+  const key = `${env.APP_ORIGIN}:${row?.owner_id}:${row?.vault_id}:${shared.item_id}`;
+  const cached = sharedNoteCache.get(key);
+  if (cached && cached.expires > Date.now()) return cached.value;
+  const item = await graph(
+    env,
+    row,
+    `${itemPath(shared.item_id)}?$select=${fields}`
+  );
+  const [, markdown] = await Promise.all([
+    insideVault(env, row, shared.item_id, item),
+    contents(env, row, item),
+  ]);
+  const value = { item, markdown: readableMarkdown(markdown) };
+  // ponytail: per-isolate cache, 16 notes for 30 seconds; use shared storage only if cold reads remain a bottleneck.
+  if (sharedNoteCache.size >= 16)
+    sharedNoteCache.delete(sharedNoteCache.keys().next().value);
+  sharedNoteCache.set(key, { expires: Date.now() + 30_000, value });
+  return value;
+}
 
 async function seal(env, value) {
   const key = await crypto.subtle.importKey(
@@ -215,7 +249,7 @@ export function readableMarkdown(body) {
     .replace(/^\uFEFF/, "")
     .replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/, "");
 }
-async function insideVault(env, row, id) {
+async function insideVault(env, row, id, initialItem) {
   if (!row.vault_id) {
     fail(409, "请先选择笔记库文件夹。");
   }
@@ -225,11 +259,9 @@ async function insideVault(env, row, id) {
     if (current === row.vault_id) {
       return parts.reverse().join("/");
     }
-    const item = await graph(
-      env,
-      row,
-      `${itemPath(current)}?$select=${fields}`
-    );
+    const item =
+      (current === id && initialItem) ||
+      (await graph(env, row, `${itemPath(current)}?$select=${fields}`));
     if (!item.name || item.name.startsWith(".")) {
       fail(403, "不允许分享隐藏文件或配置目录。");
     }
@@ -471,21 +503,81 @@ async function route(request, env) {
     if (!shared) {
       fail(404, "文章不存在或已取消分享。");
     }
-    await insideVault(env, row, shared.item_id);
-    const item = await graph(
-      env,
-      row,
-      `${itemPath(shared.item_id)}?$select=${fields}`
-    );
+    const { item, markdown } = await sharedNote(env, row, shared);
     return json({
-      assets: JSON.parse(shared.assets).map((asset) => ({
-        ref: asset.ref,
-        url: `/api/blog/media/${shared.slug}/${encodeURIComponent(asset.id)}`,
-      })),
-      markdown: readableMarkdown(await contents(env, row, item)),
+      assets: [
+        ...JSON.parse(shared.assets).map((asset) => ({
+          ref: asset.ref,
+          url: `/api/blog/media/${shared.slug}/${encodeURIComponent(asset.id)}`,
+        })),
+        ...Array.from(eagleImages(markdown), ([ref, id]) => ({
+          ref,
+          url: `/api/blog/eagle/${shared.slug}/${id}`,
+          originalUrl: `/api/blog/eagle/${shared.slug}/${id}?original=1`,
+        })),
+      ],
+      markdown,
       modified: item.lastModifiedDateTime,
       slug: shared.slug,
       title: item.name.replace(/\.md$/i, ""),
+    });
+  }
+  if (path.startsWith("eagle/") && request.method === "GET") {
+    const [, slug, eagleId, extra] = path.split("/");
+    if (extra || !/^[A-Za-z0-9_-]+$/.test(eagleId || ""))
+      fail(404, "图片未分享。");
+    const shared = await env.BLOG_DB.prepare(
+      "SELECT * FROM shares WHERE slug=? AND enabled=1"
+    )
+      .bind(slug)
+      .first();
+    if (!shared) fail(404, "文章不存在或已取消分享。");
+    const { markdown } = await sharedNote(env, row, shared);
+    if (![...eagleImages(markdown).values()].includes(eagleId))
+      fail(404, "图片未分享。");
+    const library = encodeURIComponent("Eagle素材库.library");
+    const children = await graph(
+      env,
+      row,
+      `/me/drive/root:/${library}/images/${eagleId}.info:/children?$select=${fields}`
+    );
+    const files = children.value.filter(
+      (item) => item.file && /\.(png|jpe?g|gif|webp|avif)$/i.test(item.name)
+    );
+    const original = files.find(
+      (item) =>
+        !/(?:^|_)thumbnail\./i.test(item.name) && !item.name.startsWith("_")
+    );
+    const thumbnail = files.find((item) =>
+      /(?:^|_)thumbnail\./i.test(item.name)
+    );
+    const item =
+      url.searchParams.get("original") === "1"
+        ? original
+        : thumbnail || original;
+    if (!item) fail(404, "OneDrive 中尚未找到图片，请确认素材已同步。");
+    if (item.size > 20 * 1024 * 1024) fail(413, "图片超过 20 MB。");
+    const redirect = await fetch(`${graphOrigin}${itemPath(item.id)}/content`, {
+      headers: { Authorization: `Bearer ${await accessToken(env, row)}` },
+      redirect: "manual",
+    });
+    const location = redirect.headers.get("Location");
+    if (
+      redirect.status !== 302 ||
+      !location ||
+      new URL(location).protocol !== "https:"
+    )
+      fail(502, "图片读取失败。");
+    const download = await fetch(location);
+    if (!download.ok) fail(502, "图片读取失败。");
+    const extension = item.name.split(".").at(-1).toLowerCase();
+    return new Response(download.body, {
+      headers: {
+        "Cache-Control": "no-store",
+        "Content-Type": `image/${extension === "jpg" ? "jpeg" : extension}`,
+        "Content-Security-Policy": "default-src 'none'; sandbox",
+        "X-Content-Type-Options": "nosniff",
+      },
     });
   }
   if (path.startsWith("media/") && request.method === "GET") {
