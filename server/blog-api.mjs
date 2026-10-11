@@ -557,24 +557,48 @@ async function route(request, env) {
         : thumbnail || original;
     if (!item) fail(404, "OneDrive 中尚未找到图片，请确认素材已同步。");
     if (item.size > 20 * 1024 * 1024) fail(413, "图片超过 20 MB。");
-    const redirect = await fetch(`${graphOrigin}${itemPath(item.id)}/content`, {
-      headers: { Authorization: `Bearer ${await accessToken(env, row)}` },
-      redirect: "manual",
-    });
-    const location = redirect.headers.get("Location");
-    if (
-      redirect.status !== 302 ||
-      !location ||
-      new URL(location).protocol !== "https:"
-    )
-      fail(502, "图片读取失败。");
+    let location;
+    let generatedThumbnail = false;
+    if (!thumbnail && url.searchParams.get("original") !== "1") {
+      try {
+        const preview = await graph(
+          env,
+          row,
+          `${itemPath(item.id)}/thumbnails/0/medium`
+        );
+        if (preview.url && new URL(preview.url).protocol === "https:") {
+          location = preview.url;
+          generatedThumbnail = true;
+        }
+      } catch {
+        /* OneDrive may not support a thumbnail for this image. */
+      }
+    }
+    if (!location) {
+      const redirect = await fetch(
+        `${graphOrigin}${itemPath(item.id)}/content`,
+        {
+          headers: { Authorization: `Bearer ${await accessToken(env, row)}` },
+          redirect: "manual",
+        }
+      );
+      location = redirect.headers.get("Location");
+      if (
+        redirect.status !== 302 ||
+        !location ||
+        new URL(location).protocol !== "https:"
+      )
+        fail(502, "图片读取失败。");
+    }
     const download = await fetch(location);
     if (!download.ok) fail(502, "图片读取失败。");
     const extension = item.name.split(".").at(-1).toLowerCase();
     return new Response(download.body, {
       headers: {
         "Cache-Control": "no-store",
-        "Content-Type": `image/${extension === "jpg" ? "jpeg" : extension}`,
+        "Content-Type": generatedThumbnail
+          ? "image/jpeg"
+          : `image/${extension === "jpg" ? "jpeg" : extension}`,
         "Content-Security-Policy": "default-src 'none'; sandbox",
         "X-Content-Type-Options": "nosniff",
       },

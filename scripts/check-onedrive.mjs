@@ -99,6 +99,7 @@ const actualNow = Date.now;
 let clockOffset = 0;
 Date.now = () => actualNow() + clockOffset;
 const downloads = [];
+let eagleThumbnailAvailable = true;
 globalThis.fetch = async (input, options) => {
   const url = new URL(input);
   if (url.hostname === "login.microsoftonline.com") {
@@ -116,6 +117,10 @@ globalThis.fetch = async (input, options) => {
   assert.equal(url.hostname, "graph.microsoft.com");
   assert.ok(options.headers.Authorization.startsWith("Bearer "));
   const path = decodeURIComponent(url.pathname);
+  if (path.endsWith("/thumbnails/0/medium"))
+    return Response.json({
+      url: "https://download.example.com/generated-thumbnail",
+    });
   if (path === "/v1.0/me") {
     return Response.json({
       displayName: "测试主人",
@@ -128,7 +133,16 @@ globalThis.fetch = async (input, options) => {
       return Response.json({
         value: [
           { id: "cat-original", name: "cat.jpg", file: {}, size: 1000 },
-          { id: "cat-thumb", name: "cat_thumbnail.png", file: {}, size: 100 },
+          ...(eagleThumbnailAvailable
+            ? [
+                {
+                  id: "cat-thumb",
+                  name: "cat_thumbnail.png",
+                  file: {},
+                  size: 100,
+                },
+              ]
+            : []),
         ],
       });
     return Response.json({ value: [fixture.note, fixture.hidden] });
@@ -275,6 +289,11 @@ try {
   assert.deepEqual(downloads.slice(before), ["/note"]); // No image download while reading text.
   await call(`eagle/${published.slug}/CAT`);
   assert.equal(downloads.at(-1), "/thumbnail");
+  await call(`eagle/${published.slug}/CAT?original=1`);
+  assert.equal(downloads.at(-1), "/original");
+  eagleThumbnailAvailable = false;
+  await call(`eagle/${published.slug}/CAT`);
+  assert.equal(downloads.at(-1), "/generated-thumbnail");
   await call(`eagle/${published.slug}/CAT?original=1`);
   assert.equal(downloads.at(-1), "/original");
   assert.equal((await call(`eagle/${published.slug}/PRIVATE`)).status, 404);
