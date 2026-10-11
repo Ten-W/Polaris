@@ -1,0 +1,13 @@
+---
+import { getCollection } from "astro:content";
+import Layout from "@/layouts/blog.astro";
+import Workbench from "@/components/blog-workbench";
+const samples = (await getCollection("blog")).map(note => ({ id: note.id, title: note.data.title, body: note.body || "", revision: "sample" }));
+---
+<Layout title="笔记管理" wide noindex>
+  <section class="manage-intro"><div><p class="eyebrow">NOTE WORKSPACE</p><h1>笔记工作台</h1><p class="muted">选择一篇笔记，专注于写下一个想法。</p></div><span class="connection-status">○ OneDrive 未连接</span></section>
+  {import.meta.env.DEV ? <>
+    <div class="preview-notice"><strong>本地编辑体验</strong><span>草稿仅保存在此浏览器，可导出为 Markdown；不会写入 OneDrive，也不会公开。图片、附件和 Obsidian 双链尚未接入。</span></div>
+    <Workbench samples={samples} client:only="react" />
+  </> : <section class="blog-callout"><div><h2>笔记管理尚未开放</h2><p>微软账号连接完成后，只有网站主人登录才能编辑笔记。</p><a class="button" href="/blog/">返回博客</a></div></section>}
+</Layout>

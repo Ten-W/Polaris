@@ -1,0 +1,30 @@
+---
+import "@/styles/global.css";
+import "@/styles/blog.css";
+interface Props { title: string; description?: string; wide?: boolean; noindex?: boolean }
+const { title, description = "设计观察、学习笔记与小工具。", wide = false, noindex = false } = Astro.props;
+---
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title} · 笔记博客</title>
+    <meta name="description" content={description} />
+    <meta name="robots" content={noindex ? "noindex,nofollow" : "index,follow"} />
+    <link rel="icon" href="/favicon.svg" />
+  </head>
+  <body class="blog-body">
+    <a class="skip-link" href="#blog-main">跳到正文</a>
+    <header class="blog-header">
+      <a class="blog-brand" href="/blog/"><span class="brand-dot"></span>笔记 / Notes</a>
+      <nav aria-label="网站导航">
+        <a href="/">作品集 ↗</a>
+        <a href="/blog/" aria-current={Astro.url.pathname === "/blog/" ? "page" : undefined}>博客</a>
+        <a href="/blog/manage/" aria-current={Astro.url.pathname.startsWith("/blog/manage") ? "page" : undefined}>笔记管理</a>
+      </nav>
+    </header>
+    <main id="blog-main" class:list={["blog-main", { wide }]}><slot /></main>
+    <footer class="blog-footer"><span>设计、记录与日常思考</span><span>本地预览 · OneDrive 尚未连接</span></footer>
+  </body>
+</html>

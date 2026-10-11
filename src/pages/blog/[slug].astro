@@ -1,0 +1,22 @@
+---
+import { getCollection, render } from "astro:content";
+import Layout from "@/layouts/blog.astro";
+export async function getStaticPaths() {
+  return (await getCollection("blog")).map(note => ({ params: { slug: note.id }, props: { note } }));
+}
+const { note } = Astro.props;
+const { Content } = await render(note);
+---
+<Layout title={note.data.title} description={note.data.description} noindex>
+  <a class="back-link" href="/blog/">← 所有笔记</a>
+  <header class="article-header"><div class="card-meta"><time>{note.data.date}</time><span>示例文章</span></div><h1>{note.data.title}</h1><p>{note.data.description}</p><div class="tags">{note.data.tags.map(tag => <span>{tag}</span>)}</div></header>
+  <article class="note-prose"><Content /></article>
+  <div class="article-end"><a href="/blog/">← 返回笔记列表</a><button id="copy-link" type="button">复制文章链接</button><span id="copy-status" role="status"></span></div>
+</Layout>
+<script>
+  document.querySelector("#copy-link")!.addEventListener("click", async () => {
+    const status = document.querySelector("#copy-status")!;
+    try { await navigator.clipboard.writeText(location.href); status.textContent = "已复制（当前是本地预览链接）"; }
+    catch { status.textContent = "复制失败，请复制浏览器地址栏中的链接。"; }
+  });
+</script>

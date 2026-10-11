@@ -1,0 +1,26 @@
+---
+import { getCollection } from "astro:content";
+import Layout from "@/layouts/blog.astro";
+const notes = await getCollection("blog");
+---
+<Layout title="笔记" noindex>
+  <section class="blog-intro"><p class="eyebrow">FIELD NOTES</p><h1>把思考留在这里。</h1><p class="intro-text">关于设计的观察，关于工具的尝试。<br />从零散的想法，到值得分享的笔记。</p></section>
+  <div class="section-bar"><h2>所有笔记 <span>{notes.length}</span></h2><span class="muted">当前展示示例文章</span></div>
+  <label class="search-label">搜索笔记<input id="note-search" type="search" placeholder="搜索标题、内容简介或标签…" /></label>
+  <div class="note-grid">{notes.map(note => <a class="note-card" href={`/blog/${note.id}/`} data-search={`${note.data.title} ${note.data.description} ${note.data.tags.join(" ")}`}>
+    <div class="card-meta"><time>{note.data.date}</time><span>示例</span></div><h3>{note.data.title}</h3><p>{note.data.description}</p><div class="card-bottom"><div class="tags">{note.data.tags.map(tag => <span>{tag}</span>)}</div><span aria-hidden="true">↗</span></div>
+  </a>)}</div>
+  <p id="no-results" hidden role="status">没有匹配的笔记，换个关键词试试。</p>
+  <aside class="blog-callout"><div><h2>你的笔记，仍留在自己的笔记库。</h2><p>这里将只展示你选择分享的内容。现在可以先在本地管理面板体验编辑流程。</p></div><a class="button" href="/blog/manage/">打开笔记管理 →</a></aside>
+</Layout>
+<script>
+  const input = document.querySelector<HTMLInputElement>("#note-search")!;
+  input.addEventListener("input", () => {
+    let visible = 0;
+    document.querySelectorAll<HTMLAnchorElement>("[data-search]").forEach(card => {
+      card.hidden = !card.dataset.search!.toLocaleLowerCase().includes(input.value.trim().toLocaleLowerCase());
+      if (!card.hidden) visible++;
+    });
+    document.querySelector<HTMLElement>("#no-results")!.hidden = visible > 0;
+  });
+</script>
