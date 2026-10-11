@@ -1,0 +1,11 @@
+CREATE TABLE IF NOT EXISTS connection (
+  id INTEGER PRIMARY KEY CHECK (id = 1), owner_id TEXT NOT NULL,
+  display_name TEXT NOT NULL, tokens TEXT NOT NULL, vault_id TEXT
+);
+CREATE TABLE IF NOT EXISTS sessions (
+  hash TEXT PRIMARY KEY, owner_id TEXT NOT NULL, expires INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS shares (
+  item_id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, title TEXT NOT NULL,
+  assets TEXT NOT NULL DEFAULT '[]', enabled INTEGER NOT NULL DEFAULT 1
+);

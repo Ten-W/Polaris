@@ -1,6 +1,7 @@
 allowBuilds:
   esbuild: true
   sharp: true
+  workerd: true
 minimumReleaseAgeExclude:
   - astro@7.0.3
 # Security overrides — force patched versions of vulnerable transitive deps

@@ -572,3 +572,59 @@ button:disabled {
     font-size: 12px;
   }
 }
+.folder-trail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 18px;
+}
+.folder-trail button {
+  padding: 5px 8px;
+}
+.cloud-note-preview {
+  padding: 28px;
+  min-width: 0;
+}
+.cloud-note-preview > h2,
+.cloud-empty h2 {
+  font-size: 24px;
+  font-weight: 600;
+  margin-bottom: 14px;
+}
+.cloud-empty {
+  padding: 70px 20px;
+  color: #69806d;
+}
+.cloud-empty p {
+  font-size: 14px;
+  margin-top: 16px;
+}
+.share-assets {
+  background: #f2f6ef;
+  border: 1px solid #dce7d8;
+  border-radius: 8px;
+  padding: 14px;
+  margin: 24px 0;
+  font-size: 13px;
+}
+.share-assets label {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.share-assets small {
+  color: #718472;
+}
+.share-actions {
+  display: flex;
+  gap: 10px;
+  margin: 20px 0;
+  flex-wrap: wrap;
+}
+.cloud-note-preview .note-prose {
+  margin-top: 30px;
+  border-top: 1px solid #dce7d8;
+  padding-top: 20px;
+}

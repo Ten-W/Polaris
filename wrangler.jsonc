@@ -1,0 +1,6 @@
+{
+  "name": "ten-w-polaris",
+  "pages_build_output_dir": "./dist",
+  "compatibility_date": "2026-10-11",
+  "d1_databases": [{ "binding": "BLOG_DB", "database_name": "ten-w-blog", "database_id": "8c4b4173-d487-4e70-8148-38731c207a6d" }]
+}
