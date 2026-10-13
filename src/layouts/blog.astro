@@ -1,5 +1,5 @@
 ---
-import "@/styles/global.css";
+import "@/styles/blog-theme.css";
 import "@/styles/blog.css";
 
 interface Props {
@@ -21,7 +21,7 @@ const {
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{title} · 笔记博客</title>
+    <title>{title} · Ten-W 博客</title>
     <meta name="description" content={description}>
     <meta name="robots" content={noindex ? "noindex,nofollow" : "index,follow"}>
     <link rel="icon" href="/favicon.svg">
@@ -30,14 +30,14 @@ const {
     <a class="skip-link" href="#blog-main">跳到正文</a>
     <header class="blog-header">
       <a class="blog-brand" href="/blog/"
-        ><span class="brand-dot"></span>笔记 / Notes</a
+        ><span class="brand-mark" aria-hidden="true">N</span><span>Ten-W <span class="brand-section">/ 博客</span></span></a
       >
       <nav aria-label="网站导航">
         <a href="/">作品集 ↗</a>
         <a
           href="/blog/"
-          aria-current={Astro.url.pathname === "/blog/" ? "page" : undefined}
-          >博客</a
+          aria-current={!Astro.url.pathname.startsWith("/blog/manage") ? "page" : undefined}
+          >文章</a
         >
         <a
           href="/blog/manage/"
@@ -48,7 +48,7 @@ const {
     </header>
     <main id="blog-main" class:list={["blog-main", { wide }]}><slot /></main>
     <footer class="blog-footer">
-      <span>设计、记录与日常思考</span><span>只展示选择分享的笔记</span>
+      <span>Ten-W · 记录与思考</span><span>只公开选择分享的内容</span>
     </footer>
   </body>
 </html>

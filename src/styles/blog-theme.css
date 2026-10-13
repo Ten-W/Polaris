@@ -1,0 +1,24 @@
+/* Blog theme only. Portfolio styling and server permissions are independent. */
+.blog-body {
+  --note-font:
+    "Segoe UI Variable", "Segoe UI", -apple-system, BlinkMacSystemFont,
+    "PingFang SC", "Microsoft YaHei", sans-serif;
+  --note-bg: #f5f5f5;
+  --note-surface: #ffffff;
+  --note-subtle: #fafafa;
+  --note-hover: #f0f0f0;
+  --note-text: #242424;
+  --note-muted: #616161;
+  --note-border: #e0e0e0;
+  --note-control-border: #d1d1d1;
+  --note-brand: #0f6cbd;
+  --note-brand-hover: #115ea3;
+  --note-brand-soft: #eff6fc;
+  --note-on-brand: #ffffff;
+  --note-focus: #242424;
+  --note-radius-control: 4px;
+  --note-radius-surface: 8px;
+  --note-shadow: 0 2px 4px rgb(0 0 0 / 4%), 0 0 2px rgb(0 0 0 / 8%);
+  --note-motion: 160ms;
+  --note-ease: cubic-bezier(0.1, 0.9, 0.2, 1);
+}

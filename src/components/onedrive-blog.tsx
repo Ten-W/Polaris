@@ -1,6 +1,6 @@
-import DOMPurify from "dompurify";
-import { Marked } from "marked";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Markdown, type Note } from "./note-markdown";
+
+import { useEffect, useState } from "react";
 
 type Status = {
   configured: boolean;
@@ -14,20 +14,6 @@ type Item = {
   name: string;
   folder: boolean;
   share?: { slug: string };
-};
-type Note = {
-  id?: string;
-  title: string;
-  markdown: string;
-  modified?: string;
-  assets: {
-    id?: string;
-    name?: string;
-    ref: string;
-    url?: string;
-    originalUrl?: string;
-  }[];
-  missing?: string[];
 };
 async function api(path: string, method = "GET", data?: unknown) {
   const response = await fetch(`/api/blog/${path}`, {
@@ -47,207 +33,6 @@ async function api(path: string, method = "GET", data?: unknown) {
     throw new Error(result.error || "读取失败，请稍后再试。");
   }
   return result;
-}
-function Markdown({ note }: { note: Note }) {
-  const article = useRef<HTMLElement>(null);
-  const dialog = useRef<HTMLDialogElement>(null);
-  const [viewer, setViewer] = useState<{
-    original: string;
-    preview: string;
-    alt: string;
-    loaded: boolean;
-    error: boolean;
-    attempt: number;
-  }>();
-  const assets = new Map(
-    note.assets
-      .filter((asset) => asset.url)
-      .map((asset) => [asset.ref, asset.url!])
-  );
-  const escape = (s: string) =>
-    s
-      .replaceAll("&", "&amp;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;");
-  const safeUrl = (href: string) => {
-    if (assets.has(href)) return assets.get(href)!;
-    try {
-      const url = new URL(href);
-      return /^https?:$/.test(url.protocol) &&
-        !/^(localhost|127\.|\[::1\])/i.test(url.hostname)
-        ? href
-        : null;
-    } catch {
-      return null;
-    }
-  };
-  const parser = new Marked({
-    renderer: {
-      html() {
-        return "";
-      },
-      image({ href, text }) {
-        const url = safeUrl(href);
-        if (!url) return `<span>[图片尚未接入或未分享：${escape(text)}]</span>`;
-        const original =
-          note.assets.find((asset) => asset.ref === href)?.originalUrl || url;
-        return `<a class="note-image" href="${escape(original)}" aria-label="放大图片：${escape(text)}"><img data-src="${escape(url)}" alt="${escape(text)}" decoding="async"></a>`;
-      },
-      link({ href, tokens }) {
-        const url = safeUrl(href);
-        const text = this.parser.parseInline(tokens);
-        return url
-          ? `<a href="${escape(url)}" rel="noopener noreferrer">${text}</a>`
-          : `${text} <small>（链接未接入）</small>`;
-      },
-    },
-  });
-  const html = DOMPurify.sanitize(
-    parser.parse(note.markdown, { async: false }),
-    {
-      FORBID_ATTR: ["style"],
-      FORBID_TAGS: ["style", "form", "video", "audio"],
-      SANITIZE_NAMED_PROPS: true,
-      USE_PROFILES: { html: true },
-    }
-  );
-  const content = useMemo(() => ({ __html: html }), [html]);
-  useEffect(() => {
-    const images =
-      article.current?.querySelectorAll<HTMLImageElement>("img[data-src]");
-    if (!images) return;
-    const load = (img: HTMLImageElement) => {
-      img.onload = () => {
-        img.parentElement?.classList.add("image-loaded");
-      };
-      img.onerror = () => {
-        img.parentElement?.classList.add("image-error");
-        img.parentElement?.setAttribute("title", "图片加载失败，点击重试原图");
-      };
-      img.src = img.dataset.src!;
-    };
-    const observer =
-      "IntersectionObserver" in window
-        ? new IntersectionObserver(
-            (entries) => {
-              for (const entry of entries)
-                if (entry.isIntersecting) {
-                  load(entry.target as HTMLImageElement);
-                  observer?.unobserve(entry.target);
-                }
-            },
-            { rootMargin: "200px" }
-          )
-        : null;
-    images.forEach((img) => (observer ? observer.observe(img) : load(img)));
-    return () => {
-      observer?.disconnect();
-      images.forEach((img) => {
-        img.onload = null;
-        img.onerror = null;
-      });
-    };
-  }, [html]);
-  useEffect(() => {
-    if (viewer && !dialog.current?.open) dialog.current?.showModal();
-  }, [viewer]);
-  return (
-    <>
-      <article
-        ref={article}
-        className="note-prose"
-        onClick={(event) => {
-          const link = (event.target as HTMLElement).closest<HTMLAnchorElement>(
-            "a.note-image"
-          );
-          if (!link) return;
-          event.preventDefault();
-          const image = link.querySelector("img")!;
-          setViewer({
-            original: link.href,
-            preview: image.currentSrc || image.dataset.src!,
-            alt: image.alt,
-            loaded: false,
-            error: false,
-            attempt: 0,
-          });
-        }}
-        dangerouslySetInnerHTML={content}
-      />
-      <dialog
-        ref={dialog}
-        className="image-viewer"
-        aria-label="查看原图"
-        onClose={() => setViewer(undefined)}
-        onClick={(event) => {
-          if (event.target === event.currentTarget) dialog.current?.close();
-        }}
-      >
-        {viewer && (
-          <>
-            <button
-              className="image-viewer-close"
-              autoFocus
-              aria-label="关闭图片"
-              onClick={() => dialog.current?.close()}
-            >
-              ×
-            </button>
-            <div className="image-viewer-stage">
-              {!viewer.loaded && (
-                <img className="viewer-preview" src={viewer.preview} alt="" />
-              )}
-              <img
-                key={viewer.attempt}
-                className={
-                  viewer.loaded
-                    ? "viewer-original"
-                    : "viewer-original is-loading"
-                }
-                src={viewer.original}
-                alt={viewer.alt}
-                onLoad={() =>
-                  setViewer(
-                    (current) =>
-                      current && { ...current, loaded: true, error: false }
-                  )
-                }
-                onError={() =>
-                  setViewer((current) => current && { ...current, error: true })
-                }
-              />
-              {!viewer.loaded && (
-                <div className="viewer-progress" role="status">
-                  {viewer.error ? (
-                    <>
-                      <span>原图加载失败</span>
-                      <button
-                        onClick={() =>
-                          setViewer({
-                            ...viewer,
-                            error: false,
-                            attempt: viewer.attempt + 1,
-                          })
-                        }
-                      >
-                        重试
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <span className="image-spinner" aria-hidden="true" />
-                      <span className="sr-only">正在加载原图…</span>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-          </>
-        )}
-      </dialog>
-    </>
-  );
 }
 export function OneDriveManager() {
   const [status, setStatus] = useState<Status>();
@@ -334,7 +119,9 @@ export function OneDriveManager() {
   return (
     <>
       <div className="section-bar">
-        <span>已连接 · {status.name}</span>
+        <span className="connection-status">
+          已连接 OneDrive · {status.name}
+        </span>
         <button
           disabled={busy}
           onClick={() =>
@@ -467,12 +254,14 @@ export function OneDriveManager() {
                         )
                       }
                     />
-                    {asset.name} <small>{asset.ref}</small>
+                    <span>
+                      {asset.name} <small>{asset.ref}</small>
+                    </span>
                   </label>
                 ))}
                 {!note.assets.length && (
                   <p className="muted">
-                    没有找到可选择的标准 Markdown 本地附件。
+                    没有需要单独勾选的附件。OE Link 图片随文章一起分享。
                   </p>
                 )}
                 {Boolean(note.missing?.length) && (
@@ -571,20 +360,20 @@ export function SharedNotes() {
   );
   return (
     <>
-      <div className="section-bar">
+      <div className="list-toolbar">
         <h2>
           已分享笔记 <span>{notes.length}</span>
         </h2>
+        <label className="search-label">
+          搜索笔记
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="搜索文章标题…"
+          />
+        </label>
       </div>
-      <label className="search-label">
-        搜索笔记
-        <input
-          type="search"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="搜索文章标题…"
-        />
-      </label>
       <p role="status" className="muted">
         {message || (visible.length ? "" : "没有匹配的笔记。")}
       </p>
@@ -595,8 +384,14 @@ export function SharedNotes() {
             key={note.slug}
             href={`/blog/n/${note.slug}/`}
           >
+            <span className="note-card-icon" aria-hidden="true">
+              ▤
+            </span>
+            <span className="card-meta">公开笔记</span>
             <h3>{note.title}</h3>
-            <p>阅读全文 ↗</p>
+            <p>
+              阅读全文 <span aria-hidden="true">→</span>
+            </p>
           </a>
         ))}
       </div>
@@ -622,17 +417,20 @@ export function SharedReader() {
         ← 已分享笔记
       </a>
       {note ? (
-        <>
+        <section className="reader-surface" aria-label="文章内容">
           <header className="article-header">
+            <p className="eyebrow">公开笔记</p>
             <h1>{note.title}</h1>
             {note.modified && (
               <p>更新于 {new Date(note.modified).toLocaleString("zh-CN")}</p>
             )}
           </header>
           <Markdown note={note} />
-        </>
+        </section>
       ) : (
-        <p role="status">{message}</p>
+        <p role="status" className="loading-panel">
+          {message}
+        </p>
       )}
     </>
   );
